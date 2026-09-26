@@ -1,0 +1,6 @@
+{
+  "name": "PaperFlow CS Research Agent",
+  "description": "Advanced Computer Science Research Agent for academic paper parsing, system architecture extraction with Mermaid diagrams, and student resume project opportunities.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

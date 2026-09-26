@@ -1,0 +1,63 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  }
+  
+  code, pre {
+    font-family: 'Fira Code', monospace;
+  }
+}
+
+/* Custom scrollbars for clean code and diagram inspection */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #020617;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.25s ease-out forwards;
+}
+
+.animate-slideUp {
+  animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Mermaid SVG styling enhancements */
+svg[id^="mermaid-"] {
+  max-width: 100%;
+  height: auto;
+}
+
+svg[id^="mermaid-"] .node rect,
+svg[id^="mermaid-"] .node circle,
+svg[id^="mermaid-"] .node polygon {
+  rx: 8px;
+  ry: 8px;
+  stroke-width: 1.5px !important;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4));
+}
