@@ -53,7 +53,18 @@ export default function App() {
         body: JSON.stringify(payload),
       });
 
-      const json = await res.json();
+      const contentType = res.headers.get('content-type') || '';
+      let json: any;
+      if (contentType.includes('application/json')) {
+        json = await res.json();
+      } else {
+        const rawText = await res.text();
+        console.warn('Non-JSON response received from server:', rawText.slice(0, 300));
+        throw new Error(
+          `Server returned unexpected status ${res.status} (${res.statusText || 'HTML response'}). Please check server logs or verify your paper input.`
+        );
+      }
+
       if (!res.ok || !json.success) {
         throw new Error(json.error || 'Failed to analyze paper.');
       }
@@ -62,7 +73,7 @@ export default function App() {
     } catch (err: any) {
       console.error('Analysis error:', err);
       setErrorMessage(
-        err.message || 'Error executing CS Research Agent workflow. Falling back to benchmark archive.'
+        err.message || 'Error executing CS Research Agent workflow.'
       );
     } finally {
       setIsLoading(false);

@@ -57,7 +57,19 @@ export const AgentChatDrawer: React.FC<AgentChatDrawerProps> = ({
         }),
       });
 
-      const data = await res.json();
+      let data: any = {};
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        throw new Error(`Server returned non-JSON response (${res.status}): ${text.slice(0, 100)}`);
+      }
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Chat request failed');
+      }
+
       const botMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',

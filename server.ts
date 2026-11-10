@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
+import { DEFAULT_PAPERS_MAP } from './src/data/samplePapers.ts';
 
 dotenv.config();
 
@@ -257,37 +258,95 @@ Respond with a JSON object with this exact structure:
   ]
 }`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents: promptContext,
-      config: {
-        systemInstruction,
-        responseMimeType: 'application/json',
-        temperature: 0.2,
-      },
-    });
+    // Check if the paper matches a known pre-indexed benchmark paper
+    const knownKey = (arxivId || paperTitle || paperUrl || '').toLowerCase();
+    const benchmarkMatches: Record<string, string> = {
+      '1706.03762': 'attention-is-all-you-need',
+      'attention': 'attention-is-all-you-need',
+      'transformer': 'attention-is-all-you-need',
+      '2312.00752': 'mamba-ssm',
+      'mamba': 'mamba-ssm',
+      '2106.09685': 'lora-adaptation',
+      'lora': 'lora-adaptation',
+      '2412.19437': 'deepseek-v3',
+      'deepseek': 'deepseek-v3',
+      '2205.14135': 'flash-attention',
+      'flash': 'flash-attention',
+      '2305.18290': 'dpo-alignment',
+      'dpo': 'dpo-alignment',
+    };
 
-    const text = response.text || '{}';
-    let parsedData;
+    let matchedBenchmarkId: string | null = null;
+    for (const [k, v] of Object.entries(benchmarkMatches)) {
+      if (knownKey.includes(k)) {
+        matchedBenchmarkId = v;
+        break;
+      }
+    }
+
     try {
-      parsedData = JSON.parse(text);
-    } catch {
-      // Strip markdown code fence if present
-      const cleaned = text.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-      parsedData = JSON.parse(cleaned);
-    }
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: promptContext,
+        config: {
+          systemInstruction,
+          responseMimeType: 'application/json',
+          temperature: 0.2,
+        },
+      });
 
-    // Ensure rawLabeledFlowchart adheres to [FLOWCHART] format as specified in user prompt
-    if (parsedData.mermaidCode && !parsedData.rawLabeledFlowchart) {
-      parsedData.rawLabeledFlowchart = `[FLOWCHART]\n${parsedData.mermaidCode}`;
-    } else if (parsedData.rawLabeledFlowchart && !parsedData.rawLabeledFlowchart.startsWith('[FLOWCHART]')) {
-      parsedData.rawLabeledFlowchart = `[FLOWCHART]\n${parsedData.rawLabeledFlowchart}`;
-    }
+      const text = response.text || '{}';
+      let parsedData;
+      try {
+        parsedData = JSON.parse(text);
+      } catch {
+        // Strip markdown code fence if present
+        const cleaned = text.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+        parsedData = JSON.parse(cleaned);
+      }
 
-    res.json({
-      success: true,
-      data: parsedData,
-    });
+      // Ensure rawLabeledFlowchart adheres to [FLOWCHART] format as specified in user prompt
+      if (parsedData.mermaidCode && !parsedData.rawLabeledFlowchart) {
+        parsedData.rawLabeledFlowchart = `[FLOWCHART]\n${parsedData.mermaidCode}`;
+      } else if (parsedData.rawLabeledFlowchart && !parsedData.rawLabeledFlowchart.startsWith('[FLOWCHART]')) {
+        parsedData.rawLabeledFlowchart = `[FLOWCHART]\n${parsedData.rawLabeledFlowchart}`;
+      }
+
+      return res.json({
+        success: true,
+        data: parsedData,
+      });
+    } catch (genError: any) {
+      console.warn('Gemini generation error, checking fallback benchmark:', genError.message);
+      
+      // If we matched a known benchmark paper, serve its verified data directly
+      if (matchedBenchmarkId && DEFAULT_PAPERS_MAP[matchedBenchmarkId]) {
+        return res.json({
+          success: true,
+          data: DEFAULT_PAPERS_MAP[matchedBenchmarkId],
+          fallbackNotice: 'Served from verified landmark benchmark archive.',
+        });
+      }
+
+      // Provide human-friendly error message if API key missing or high demand
+      let userMsg = genError.message || 'Error communicating with AI research model.';
+      try {
+        const parsedErr = JSON.parse(userMsg);
+        if (parsedErr?.error?.message) {
+          userMsg = parsedErr.error.message;
+        }
+      } catch {
+        // keep userMsg as is
+      }
+
+      return res.status(503).json({
+        error: userMsg.includes('high demand') 
+          ? 'The AI model is currently experiencing high demand. Please try again in a few moments, or select one of the pre-indexed Landmark Benchmark Papers above.'
+          : userMsg.includes('API key') || userMsg.includes('authentication')
+          ? 'Gemini API authentication issue. Please verify your GEMINI_API_KEY in the Secrets panel, or explore pre-indexed landmark benchmark papers (Transformer, Mamba, LoRA, DeepSeek-V3, FlashAttention, DPO).'
+          : userMsg,
+      });
+    }
   } catch (error: any) {
     console.error('Paper analysis failed:', error);
     res.status(500).json({
@@ -336,7 +395,18 @@ Provide precise, mathematically grounded yet approachable answers. When appropri
     });
   } catch (error: any) {
     console.error('Chat error:', error);
-    res.status(500).json({ error: error.message || 'Chat agent error' });
+    let msg = error.message || 'Chat agent error';
+    try {
+      const parsed = JSON.parse(msg);
+      if (parsed?.error?.message) msg = parsed.error.message;
+    } catch {
+      // keep
+    }
+    res.status(500).json({ 
+      error: msg.includes('high demand')
+        ? 'AI advisor model is currently experiencing high demand. Please try asking again shortly.'
+        : msg
+    });
   }
 });
 
